@@ -6,12 +6,14 @@ notes et suppression par utilisateur.
 """
 
 import tkinter as tk
-from tkinter import messagebox, simpledialog, ttk
+from tkinter import messagebox, ttk
 
 from app import theme
-from app.widgets import BoutonModerne
+from app.widgets import (
+    BoutonModerne, barre_defilement_moderne, lier_defilement_molette, liste_moderne,
+    saisir_texte_moderne,
+)
 from src.database.base_donnees import (
-    initialiser_base,
     lister_candidatures,
     modifier_statut,
     modifier_notes,
@@ -43,14 +45,20 @@ class MesCandidatures(tk.Frame):
     def __init__(self, parent, app):
         super().__init__(parent, bg=theme.FOND)
         self.app = app
+        self._candidatures_cache = None
+        self._email_cache = None
+        self._revision_cache = None
+        self._rendu_apres = None
+        self._rendu_version = 0
+        self._candidatures_rendu = []
+        self._index_rendu = 0
 
-        initialiser_base()
-
+        self._creer_defilement()
         self._creer_titre()
         self._creer_filtre()
 
         self.compteur = tk.Label(
-            self,
+            self.contenu_page,
             text="",
             font=theme.PETIT,
             fg=theme.TEXTE_CLAIR,
@@ -59,11 +67,37 @@ class MesCandidatures(tk.Frame):
         self.compteur.pack(anchor="w", padx=50, pady=(0, 10))
 
         self._creer_zone_liste()
-        self.actualiser()
+
+    def _creer_defilement(self):
+        self.canvas = tk.Canvas(
+            self, bg=theme.FOND, highlightthickness=0, yscrollincrement=30
+        )
+        barre = barre_defilement_moderne(self, self.canvas.yview)
+        self.canvas.configure(yscrollcommand=barre.set)
+        barre.pack(side="right", fill="y")
+        self.canvas.pack(side="left", fill="both", expand=True)
+
+        self.contenu_page = tk.Frame(self.canvas, bg=theme.FOND)
+        fenetre = self.canvas.create_window(
+            (0, 0), window=self.contenu_page, anchor="nw"
+        )
+        self.contenu_page.bind(
+            "<Configure>",
+            lambda _event: self.canvas.configure(
+                scrollregion=self.canvas.bbox("all")
+            ),
+        )
+        self.canvas.bind(
+            "<Configure>",
+            lambda evenement: self.canvas.itemconfigure(
+                fenetre, width=evenement.width
+            ),
+        )
+        lier_defilement_molette(self.canvas)
 
     def _creer_titre(self):
         tk.Label(
-            self,
+            self.contenu_page,
             text="Mes candidatures",
             font=theme.TITRE,
             fg=theme.MARINE,
@@ -71,7 +105,7 @@ class MesCandidatures(tk.Frame):
         ).pack(anchor="w", padx=50, pady=(25, 0))
 
         tk.Label(
-            self,
+            self.contenu_page,
             text="Suis l'avancement de tes candidatures et mets à jour leur statut.",
             font=theme.NORMAL,
             fg=theme.TEXTE_CLAIR,
@@ -80,7 +114,7 @@ class MesCandidatures(tk.Frame):
 
     def _creer_filtre(self):
         carte = tk.Frame(
-            self,
+            self.contenu_page,
             bg=theme.BLANC,
             highlightbackground=theme.BORDURE,
             highlightthickness=1
@@ -89,6 +123,7 @@ class MesCandidatures(tk.Frame):
 
         ligne = tk.Frame(carte, bg=theme.BLANC)
         ligne.pack(fill="x", padx=14, pady=12)
+        ligne.grid_columnconfigure(0, weight=1)
 
         tk.Label(
             ligne,
@@ -98,26 +133,23 @@ class MesCandidatures(tk.Frame):
             bg=theme.BLANC
         ).grid(row=0, column=0, sticky="w")
 
-        self.choix_statut = ttk.Combobox(
-            ligne,
-            values=[TOUS_STATUTS] + STATUTS_POSSIBLES,
-            state="readonly",
-            width=20,
-            font=theme.NORMAL
+        self.choix_statut = liste_moderne(
+            ligne, [TOUS_STATUTS] + STATUTS_POSSIBLES,
+            largeur=220, hauteur=46,
         )
         self.choix_statut.current(0)
         self.choix_statut.grid(
-            row=1, column=0, padx=(0, 14)
+            row=1, column=0, sticky="ew", padx=(0, 14), pady=(5, 0)
         )
         self.choix_statut.bind(
             "<<ComboboxSelected>>",
-            lambda evenement: self.actualiser()
+            lambda evenement: self._afficher_filtre()
         )
 
         BoutonModerne(
             ligne,
             texte="Actualiser",
-            commande=self.actualiser,
+            commande=lambda: self.actualiser(force=True),
             style="secondaire",
             icone="↺",
             fond_parent=theme.BLANC,
@@ -125,72 +157,10 @@ class MesCandidatures(tk.Frame):
         ).grid(row=1, column=1, padx=(6, 0))
 
     def _creer_zone_liste(self):
-        cadre = tk.Frame(self, bg=theme.FOND)
-        cadre.pack(
-            fill="both",
-            expand=True,
-            padx=40,
-            pady=(0, 20)
-        )
-
-        self.canvas = tk.Canvas(
-            cadre,
-            bg=theme.FOND,
-            highlightthickness=0,
-            yscrollincrement=30
-        )
-
-        barre = ttk.Scrollbar(
-            cadre,
-            orient="vertical",
-            command=self.canvas.yview
-        )
-
-        self.canvas.configure(
-            yscrollcommand=barre.set
-        )
-
-        barre.pack(side="right", fill="y")
-        self.canvas.pack(side="left", fill="both", expand=True)
-
-        self.liste = tk.Frame(
-            self.canvas,
-            bg=theme.FOND
-        )
-
-        fenetre = self.canvas.create_window(
-            (0, 0),
-            window=self.liste,
-            anchor="nw"
-        )
-
-        self.liste.bind(
-            "<Configure>",
-            lambda evenement: self.canvas.configure(
-                scrollregion=self.canvas.bbox("all")
-            )
-        )
-
-        self.canvas.bind(
-            "<Configure>",
-            lambda evenement: self.canvas.itemconfig(
-                fenetre,
-                width=evenement.width
-            )
-        )
-
-        self.bind_all(
-            "<MouseWheel>",
-            self._molette,
-            add="+"
-        )
-
-    def _molette(self, evenement):
-        if self.winfo_ismapped():
-            self.canvas.yview_scroll(
-                int(-evenement.delta / 120),
-                "units"
-            )
+        cadre = tk.Frame(self.contenu_page, bg=theme.FOND)
+        cadre.pack(fill="x", padx=40, pady=(0, 20))
+        self.liste = tk.Frame(cadre, bg=theme.FOND)
+        self.liste.pack(fill="x")
 
     def _email_utilisateur(self):
         email = getattr(self.app, "utilisateur", None)
@@ -200,13 +170,33 @@ class MesCandidatures(tk.Frame):
 
         return email.strip().lower()
 
-    def actualiser(self):
+    def actualiser(self, force=False):
         email = self._email_utilisateur()
+        revision = getattr(self.app, "candidatures_revision", 0)
+        donnees_modifiees = (
+            force
+            or self._candidatures_cache is None
+            or email != self._email_cache
+            or revision != self._revision_cache
+        )
 
-        if not email:
-            candidatures = []
-        else:
-            candidatures = lister_candidatures(email)
+        if donnees_modifiees:
+            self._candidatures_cache = lister_candidatures(email) if email else []
+            self._email_cache = email
+            self._revision_cache = revision
+            self._afficher_filtre()
+        elif (
+            self._candidatures_rendu
+            and self._index_rendu < len(self._candidatures_rendu)
+            and self._rendu_apres is None
+        ):
+            self._rendu_apres = self.after_idle(
+                lambda v=self._rendu_version: self._rendre_lot(v)
+            )
+
+    def _afficher_filtre(self):
+        candidatures = list(self._candidatures_cache or [])
+        email = self._email_utilisateur()
 
         statut_choisi = self.choix_statut.get()
 
@@ -217,14 +207,20 @@ class MesCandidatures(tk.Frame):
                 if candidature.get("statut") == statut_choisi
             ]
 
-        self.compteur.config(
-            text=f"{len(candidatures)} candidature(s)"
-        )
+        self.compteur.config(text=f"{len(candidatures)} candidature(s)")
+
+        if self._rendu_apres is not None:
+            self.after_cancel(self._rendu_apres)
+            self._rendu_apres = None
+        self._rendu_version += 1
+        version = self._rendu_version
 
         for enfant in self.liste.winfo_children():
             enfant.destroy()
 
         if not candidatures:
+            self._candidatures_rendu = []
+            self._index_rendu = 0
             message = (
                 "Connecte-toi pour consulter tes candidatures."
                 if not email
@@ -244,8 +240,33 @@ class MesCandidatures(tk.Frame):
 
             return
 
-        for candidature in candidatures:
-            self._ligne_candidature(candidature)
+        self._candidatures_rendu = candidatures
+        self._index_rendu = 0
+        self.compteur.config(text=f"Chargement des candidatures : 0/{len(candidatures)}…")
+        self._rendre_lot(version)
+
+    def _rendre_lot(self, version):
+        self._rendu_apres = None
+        if version != self._rendu_version or not self.winfo_exists():
+            return
+        if not self.winfo_ismapped():
+            return
+
+        fin = min(self._index_rendu + 12, len(self._candidatures_rendu))
+        for index in range(self._index_rendu, fin):
+            self._ligne_candidature(self._candidatures_rendu[index])
+        self._index_rendu = fin
+
+        total = len(self._candidatures_rendu)
+        if fin < total:
+            self.compteur.config(text=f"Affichage des candidatures : {fin}/{total}…")
+            self._rendu_apres = self.after(
+                1, lambda v=version: self._rendre_lot(v)
+            )
+        else:
+            self.compteur.config(text=f"{total} candidature(s)")
+            self._candidatures_rendu = []
+            self._index_rendu = 0
 
     def _ligne_candidature(self, candidature):
         carte = tk.Frame(
@@ -305,12 +326,9 @@ class MesCandidatures(tk.Frame):
         bas = tk.Frame(contenu, bg=theme.BLANC)
         bas.pack(fill="x", pady=(10, 0))
 
-        choix = ttk.Combobox(
-            bas,
-            values=STATUTS_POSSIBLES,
-            state="readonly",
-            width=16,
-            font=theme.PETIT
+        choix = liste_moderne(
+            bas, STATUTS_POSSIBLES, largeur=180, hauteur=46,
+            police=theme.PETIT,
         )
         choix.set(statut)
         choix.pack(side="left")
@@ -379,7 +397,7 @@ class MesCandidatures(tk.Frame):
                 parent=self
             )
 
-        self.actualiser()
+        self.actualiser(force=True)
 
     def _editer_notes(self, candidature):
         email = self._email_utilisateur()
@@ -392,11 +410,11 @@ class MesCandidatures(tk.Frame):
             )
             return
 
-        nouvelles_notes = simpledialog.askstring(
-            "Notes",
+        nouvelles_notes = saisir_texte_moderne(
+            self,
+            "Notes personnelles",
             f"Notes pour {candidature['entreprise_nom']} :",
-            initialvalue=candidature.get("notes") or "",
-            parent=self
+            valeur_initiale=candidature.get("notes") or "",
         )
 
         if nouvelles_notes is None:
@@ -415,7 +433,7 @@ class MesCandidatures(tk.Frame):
                 parent=self
             )
 
-        self.actualiser()
+        self.actualiser(force=True)
 
     def _supprimer(self, candidature):
         email = self._email_utilisateur()
@@ -450,4 +468,4 @@ class MesCandidatures(tk.Frame):
                 parent=self
             )
 
-        self.actualiser()
+        self.actualiser(force=True)

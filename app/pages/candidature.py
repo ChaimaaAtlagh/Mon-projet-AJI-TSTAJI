@@ -10,12 +10,16 @@ Page « Candidature » :
 """
 
 import os
+import threading
 import tkinter as tk
 from datetime import date
 from tkinter import messagebox, ttk
 
 from app import theme
-from app.widgets import BoutonModerne
+from app.widgets import (
+    BoutonModerne, barre_defilement_moderne, lier_defilement_molette,
+    zone_texte_moderne,
+)
 
 from src.database.base_donnees import (
     initialiser_base,
@@ -48,6 +52,7 @@ class Candidature(tk.Frame):
     def __init__(self, parent, app):
         super().__init__(parent, bg=theme.FOND)
         self.app = app
+        self._confirmation_en_cours = False
 
         initialiser_base()
 
@@ -92,11 +97,7 @@ class Candidature(tk.Frame):
             yscrollincrement=30
         )
 
-        barre = ttk.Scrollbar(
-            self,
-            orient="vertical",
-            command=self.canvas.yview
-        )
+        barre = barre_defilement_moderne(self, self.canvas.yview)
 
         self.canvas.configure(yscrollcommand=barre.set)
 
@@ -126,14 +127,7 @@ class Candidature(tk.Frame):
             )
         )
 
-        self.bind_all("<MouseWheel>", self._molette, add="+")
-
-    def _molette(self, evenement):
-        if self.winfo_ismapped():
-            self.canvas.yview_scroll(
-                int(-evenement.delta / 120),
-                "units"
-            )
+        lier_defilement_molette(self.canvas)
 
     # --------------------------------------------------
     # TITRE
@@ -243,7 +237,7 @@ class Candidature(tk.Frame):
             justify="left"
         ).pack(anchor="w", pady=(6, 14))
 
-        BoutonModerne(
+        bouton_acces = BoutonModerne(
             contenu,
             texte=f"Aller à {page_cible}",
             icone="→",
@@ -251,7 +245,8 @@ class Candidature(tk.Frame):
             commande=lambda: self.app.afficher_page(page_cible),
             fond_parent=theme.BLANC,
             hauteur=36
-        ).pack(anchor="w")
+        )
+        bouton_acces.pack(anchor="w")
 
     # --------------------------------------------------
     # CARTE ENTREPRISE
@@ -456,16 +451,10 @@ class Candidature(tk.Frame):
             bg=theme.BLANC
         ).pack(anchor="w")
 
-        self.champ_lettre = tk.Text(
-            contenu,
-            width=80,
-            height=10,
-            font=theme.NORMAL,
-            relief="solid",
-            bd=1,
-            wrap="word"
+        self.champ_lettre = zone_texte_moderne(
+            contenu, largeur=620, hauteur=250
         )
-        self.champ_lettre.pack(anchor="w", pady=(4, 8))
+        self.champ_lettre.pack(fill="x", pady=(6, 12))
 
         base = profil.get("lettre_brouillon")
 
@@ -491,17 +480,12 @@ class Candidature(tk.Frame):
             bg=theme.BLANC
         ).pack(anchor="w")
 
-        self.champ_notes = tk.Text(
-            contenu,
-            width=80,
-            height=3,
-            font=theme.NORMAL,
-            relief="solid",
-            bd=1
+        self.champ_notes = zone_texte_moderne(
+            contenu, largeur=620, hauteur=104
         )
-        self.champ_notes.pack(anchor="w", pady=(4, 16))
+        self.champ_notes.pack(fill="x", pady=(6, 16))
 
-        BoutonModerne(
+        self.bouton_confirmer = BoutonModerne(
             contenu,
             texte="Confirmer la candidature",
             icone="✓",
@@ -509,13 +493,17 @@ class Candidature(tk.Frame):
             commande=lambda: self._confirmer(profil, entreprise),
             fond_parent=theme.BLANC,
             hauteur=40
-        ).pack(anchor="w")
+        )
+        self.bouton_confirmer.pack(anchor="w")
 
     # --------------------------------------------------
     # CONFIRMATION DE LA CANDIDATURE
     # --------------------------------------------------
 
     def _confirmer(self, profil, entreprise):
+        if self._confirmation_en_cours:
+            return
+
         email_utilisateur = self._email_utilisateur()
 
         if not email_utilisateur:
@@ -537,67 +525,74 @@ class Candidature(tk.Frame):
 
         notes = self.champ_notes.get("1.0", "end").strip()
         lettre = self.champ_lettre.get("1.0", "end").strip()
+        date_du_jour = date.today().isoformat()
+        bouton = self.bouton_confirmer
+        texte_bouton = bouton.cget("text")
+        bouton.configure(state="disabled", text="Enregistrement en cours…")
+        self._confirmation_en_cours = True
+        racine = self.winfo_toplevel()
 
-        try:
-            # L'email relie la candidature au compte connecté
-            id_candidature = ajouter_candidature(
-                entreprise,
-                email_utilisateur
-            )
-
-            if not id_candidature:
-                messagebox.showerror(
-                    "AJI TSTAJI",
-                    "Impossible d'enregistrer la candidature."
+        def enregistrer():
+            resultat = {"id": None, "succes": False, "message": "", "erreur": None}
+            try:
+                resultat["id"] = ajouter_candidature(entreprise, email_utilisateur)
+                if not resultat["id"]:
+                    raise RuntimeError("Impossible d'enregistrer la candidature.")
+                if notes:
+                    modifier_notes(resultat["id"], notes, email_utilisateur)
+                modifier_lettre_candidature(
+                    resultat["id"], lettre, email_utilisateur
                 )
-                return
-
-            if notes:
-                modifier_notes(
-                    id_candidature,
-                    notes,
-                    email_utilisateur
+                resultat["succes"], resultat["message"] = envoyer_confirmation_test(
+                    profil_actuel, entreprise, date_du_jour
                 )
+                modifier_email_confirmation(
+                    resultat["id"],
+                    "Test envoyé" if resultat["succes"] else "Test échoué",
+                    email_utilisateur,
+                )
+            except Exception as erreur:
+                resultat["erreur"] = erreur
 
-            modifier_lettre_candidature(
-                id_candidature,
-                lettre,
-                email_utilisateur
-            )
+            def terminer():
+                try:
+                    if not racine.winfo_exists():
+                        return
+                    if resultat["id"]:
+                        self.app.candidatures_revision = (
+                            getattr(self.app, "candidatures_revision", 0) + 1
+                        )
+                    if not self.winfo_exists():
+                        return
+                    self._confirmation_en_cours = False
+                    if bouton.winfo_exists():
+                        bouton.configure(state="normal", text=texte_bouton)
+                    if resultat["erreur"] is not None:
+                        messagebox.showerror(
+                            "AJI TSTAJI",
+                            "Une erreur est survenue lors de l'enregistrement "
+                            f"de la candidature :\n{resultat['erreur']}",
+                            parent=racine,
+                        )
+                        return
 
-            date_du_jour = date.today().isoformat()
+                    nom_entreprise = texte(entreprise.get("Nom_Entreprise"))
+                    icone = "✅" if resultat["succes"] else "❌"
+                    messagebox.showinfo(
+                        "AJI TSTAJI",
+                        f"Candidature enregistrée pour {nom_entreprise}.\n\n"
+                        f"{icone} {resultat['message']}",
+                        parent=racine,
+                    )
+                    self.app.entreprise_choisie = None
+                    if self.app.page_active == "Candidature":
+                        self.app.afficher_page("Mes candidatures")
+                except tk.TclError:
+                    return
 
-            succes, message_email = envoyer_confirmation_test(
-                profil_actuel,
-                entreprise,
-                date_du_jour
-            )
+            try:
+                racine.after(0, terminer)
+            except (RuntimeError, tk.TclError):
+                pass
 
-            modifier_email_confirmation(
-                id_candidature,
-                "Test envoyé" if succes else "Test échoué",
-                email_utilisateur
-            )
-
-        except Exception as erreur:
-            messagebox.showerror(
-                "AJI TSTAJI",
-                "Une erreur est survenue lors de l'enregistrement "
-                f"de la candidature :\n{erreur}"
-            )
-            return
-
-        nom_entreprise = texte(
-            entreprise.get("Nom_Entreprise")
-        )
-
-        icone = "✅" if succes else "❌"
-
-        messagebox.showinfo(
-            "AJI TSTAJI",
-            f"Candidature enregistrée pour {nom_entreprise}.\n\n"
-            f"{icone} {message_email}"
-        )
-
-        self.app.entreprise_choisie = None
-        self.app.afficher_page("Mes candidatures")
+        threading.Thread(target=enregistrer, daemon=True).start()

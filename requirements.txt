@@ -5,3 +5,9 @@ seaborn
 requests
 python-dotenv
 Pillow
+customtkinter
+google-genai
+openai==3.46.0
+pyinstaller
+pypdf
+python-docx

@@ -11,10 +11,9 @@ import hashlib
 import hmac
 import json
 import os
-from pathlib import Path
+from src.utils.paths import chemin_donnees
 
-RACINE = Path(__file__).resolve().parents[2]
-FICHIER = RACINE / "data" / "utilisateurs.json"
+FICHIER = chemin_donnees("utilisateurs.json")
 ITERATIONS = 200_000
 
 

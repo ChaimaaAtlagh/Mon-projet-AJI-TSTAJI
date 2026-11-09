@@ -347,7 +347,7 @@ class LoginPage(ctk.CTkFrame):
 
         # E-mail
         self._field_label(form, "Adresse e-mail")
-        self.email_box, self.email = self._make_field(form, "exemple@email.com")
+        self.email_box, self.email = self._make_field(form, "utilisateur@example.com")
         self.email_box.pack(fill="x", pady=(6, 16))
 
         # Mot de passe

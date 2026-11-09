@@ -1,0 +1,53 @@
+databases:
+  - name: aji-tstaji-db
+    databaseName: aji_tstaji
+    user: aji_tstaji
+    region: frankfurt
+    plan: 0.1c-256mb
+
+services:
+  - type: web
+    name: aji-tstaji-api
+    runtime: python
+    region: frankfurt
+    plan: starter
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    preDeployCommand: python manage.py migrate
+    startCommand: gunicorn aji_api.wsgi:application --bind 0.0.0.0:$PORT --workers 2 --timeout 120
+    healthCheckPath: /health/
+    disk:
+      name: aji-tstaji-private-documents
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: DJANGO_SECRET_KEY
+        generateValue: true
+      - key: DJANGO_DEBUG
+        value: "false"
+      - key: DB_NAME
+        fromDatabase:
+          name: aji-tstaji-db
+          property: database
+      - key: DB_USER
+        fromDatabase:
+          name: aji-tstaji-db
+          property: user
+      - key: DB_PASSWORD
+        fromDatabase:
+          name: aji-tstaji-db
+          property: password
+      - key: DB_HOST
+        fromDatabase:
+          name: aji-tstaji-db
+          property: host
+      - key: DB_PORT
+        fromDatabase:
+          name: aji-tstaji-db
+          property: port
+      - key: PRIVATE_DOCUMENT_ROOT
+        value: /var/data/private-documents
+      - key: BREVO_API_KEY
+        sync: false
+      - key: BREVO_SENDER_EMAIL
+        sync: false

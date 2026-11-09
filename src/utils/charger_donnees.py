@@ -12,22 +12,22 @@ Utilisation directe (aperçu des données) :
     python src/utils/charger_donnees.py
 """
 
-from pathlib import Path
-
 import pandas as pd
-
-# Racine du projet : on remonte de 2 niveaux (src/utils/ -> racine)
-RACINE = Path(__file__).resolve().parents[2]
+from src.utils.classification import normaliser_donnees_entreprises
+from src.utils.paths import chemin_ressource
 
 # Chemin du dataset nettoyé (la seule source de l'application)
-FICHIER_DONNEES = RACINE / "data" / "cleaned" / "data_nettoyee.xlsx"
+FICHIER_DONNEES = chemin_ressource(
+    "data", "cleaned", "data_nettoyee.xlsx"
+)
 
 
 def charger_entreprises():
     """Lit le fichier Excel nettoyé et retourne un DataFrame pandas."""
     if not FICHIER_DONNEES.is_file():
         raise FileNotFoundError(f"Fichier introuvable : {FICHIER_DONNEES}")
-    return pd.read_excel(FICHIER_DONNEES)
+    donnees = pd.read_excel(FICHIER_DONNEES)
+    return normaliser_donnees_entreprises(donnees)
 
 
 def afficher_apercu(df):

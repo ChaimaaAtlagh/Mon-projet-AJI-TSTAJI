@@ -1,37 +1,24 @@
 """
 accueil.py
 Page d'accueil de l'application AJI TSTAJI :
-titre, recherche, cartes de navigation et section « Pourquoi choisir ».
+titre, recherche et section « Pourquoi choisir ».
 """
 
 import tkinter as tk
-from pathlib import Path
-from tkinter import ttk
 
 from PIL import Image, ImageTk
 
 from app import theme
-from app.widgets import BoutonModerne
+from app.widgets import (
+    BoutonModerne, barre_defilement_moderne, entree_moderne,
+    lier_defilement_molette, liste_moderne,
+)
+from src.utils.paths import chemin_ressource
 
-IMAGE_HERO = Path(__file__).resolve().parents[1] / "assets" / "hero.png"
+IMAGE_HERO = chemin_ressource("app", "assets", "hero.png")
 
 POLICE_EMOJI = "Segoe UI Emoji"
 TEXTE_RECHERCHE = "Rechercher une entreprise, un domaine..."
-
-CARTES = [
-    ("🏢", "Entreprises", "Découvre les entreprises de Marrakech et leurs coordonnées.",
-     "Entreprises", theme.VIOLET, theme.VIOLET_PASTEL),
-    ("💼", "Opportunités", "Trouve les opportunités qui te correspondent.",
-     "Opportunités", theme.VERT, theme.VERT_PASTEL),
-    ("📋", "Mes candidatures", "Suis l'avancement de tes candidatures.",
-     "Mes candidatures", theme.ORANGE, theme.ORANGE_PASTEL),
-    ("📊", "Analyse", "Explore les tendances et les statistiques.",
-     "Analyse", theme.BLEU, theme.BLEU_CLAIR),
-    ("📄", "Génération CV", "Crée ton CV et ta lettre depuis ton profil.",
-     "Mon profil", theme.ROSE, theme.ROSE_PASTEL),
-    ("👤", "Mon profil", "Renseigne tes informations une seule fois.",
-     "Mon profil", theme.VIOLET, theme.VIOLET_PASTEL),
-]
 
 AVANTAGES = [
     ("🎯", "Simple et intuitif", "Une interface facile à utiliser, accessible à tous.",
@@ -54,14 +41,13 @@ class Accueil(tk.Frame):
 
         self._creer_defilement()
         self._creer_hero()
-        self._creer_cartes()
         self._creer_pourquoi()
 
     # ---------- DÉFILEMENT (canvas + barre de défilement) ----------
     def _creer_defilement(self):
         self.canvas = tk.Canvas(self, bg=theme.FOND, highlightthickness=0,
                                 yscrollincrement=30)
-        barre = ttk.Scrollbar(self, orient="vertical", command=self.canvas.yview)
+        barre = barre_defilement_moderne(self, self.canvas.yview)
         self.canvas.configure(yscrollcommand=barre.set)
         barre.pack(side="right", fill="y")
         self.canvas.pack(side="left", fill="both", expand=True)
@@ -72,11 +58,7 @@ class Accueil(tk.Frame):
         self.contenu.bind(
             "<Configure>", lambda e: self.canvas.configure(scrollregion=self.canvas.bbox("all")))
         self.canvas.bind("<Configure>", lambda e: self.canvas.itemconfig(fenetre, width=e.width))
-        self.bind_all("<MouseWheel>", self._molette, add="+")
-
-    def _molette(self, evenement):
-        if self.winfo_ismapped():
-            self.canvas.yview_scroll(int(-evenement.delta / 120), "units")
+        lier_defilement_molette(self.canvas)
 
     # ---------- SECTION 1 : TITRE + RECHERCHE ----------
     def _creer_hero(self):
@@ -152,45 +134,52 @@ class Accueil(tk.Frame):
     def _creer_recherche(self, parent):
         barre = tk.Frame(parent, bg=theme.BLANC,
                          highlightbackground=theme.BORDURE, highlightthickness=1)
-        barre.pack(anchor="w")
+        barre.pack(fill="x")
         ligne = tk.Frame(barre, bg=theme.BLANC)
-        ligne.pack(padx=14, pady=10)
+        ligne.pack(fill="x", padx=14, pady=12)
 
-        tk.Label(ligne, text="🔍", font=(POLICE_EMOJI, 13),
-                 fg=theme.TEXTE_CLAIR, bg=theme.BLANC).pack(side="left")
-        self.champ_texte = tk.Entry(ligne, width=34, font=theme.NORMAL, relief="flat",
-                                    bg=theme.BLANC, fg=theme.TEXTE, insertbackground=theme.TEXTE)
-        self.champ_texte.pack(side="left", padx=(8, 16), ipady=6)
+        rang_recherche = tk.Frame(ligne, bg=theme.BLANC)
+        rang_recherche.pack(fill="x")
+        tk.Label(rang_recherche, text="🔍", font=(POLICE_EMOJI, 13),
+                 fg=theme.TEXTE_CLAIR, bg=theme.BLANC).pack(side="left", padx=(0, 8))
+        self.champ_texte = entree_moderne(
+            rang_recherche, largeur=360, hauteur=46,
+            placeholder=TEXTE_RECHERCHE,
+        )
+        self.champ_texte.pack(side="left", fill="x", expand=True)
         self._ajouter_texte_indicatif(self.champ_texte, TEXTE_RECHERCHE)
         self.champ_texte.bind("<Return>", lambda e: self._rechercher())
 
-        tk.Label(ligne, text="📍", font=(POLICE_EMOJI, 13),
+        controles = tk.Frame(ligne, bg=theme.BLANC)
+        controles.pack(fill="x", pady=(10, 0))
+        tk.Label(controles, text="📍", font=(POLICE_EMOJI, 13),
                  fg=theme.TEXTE_CLAIR, bg=theme.BLANC).pack(side="left")
 
         quartiers = sorted(q for q in self.app.donnees["Quartier"].dropna().unique()
                            if q != "A_CONFIRMER")
-        self.choix_quartier = ttk.Combobox(ligne, values=["Tous les quartiers"] + quartiers,
-                                           state="readonly", width=20, font=theme.NORMAL)
+        self.choix_quartier = liste_moderne(
+            controles, ["Tous les quartiers"] + quartiers, largeur=250,
+        )
         self.choix_quartier.current(0)
-        self.choix_quartier.pack(side="left", padx=(8, 0))
+        self.choix_quartier.pack(side="left", padx=(8, 0), fill="x", expand=True)
 
-        BoutonModerne(ligne, texte="Rechercher", commande=self._rechercher,
+        BoutonModerne(controles, texte="Rechercher", commande=self._rechercher,
                      style="principal", icone="🔍", fond_parent=theme.BLANC,
-                     hauteur=34).pack(side="left", padx=(16, 0))
+                     hauteur=42).pack(side="left", padx=(12, 0))
 
     def _ajouter_texte_indicatif(self, champ, texte_indicatif):
         champ.insert(0, texte_indicatif)
-        champ.config(fg=theme.TEXTE_CLAIR)
+        champ.configure(text_color=theme.CHAMP_PLACEHOLDER)
 
         def entrer(evenement):
             if champ.get() == texte_indicatif:
                 champ.delete(0, "end")
-                champ.config(fg=theme.TEXTE)
+                champ.configure(text_color=theme.CHAMP_TEXTE)
 
         def sortir(evenement):
             if not champ.get():
                 champ.insert(0, texte_indicatif)
-                champ.config(fg=theme.TEXTE_CLAIR)
+                champ.configure(text_color=theme.CHAMP_PLACEHOLDER)
 
         champ.bind("<FocusIn>", entrer)
         champ.bind("<FocusOut>", sortir)
@@ -206,38 +195,7 @@ class Accueil(tk.Frame):
         self.app.recherche = {"texte": texte_saisi, "quartier": quartier}
         self.app.afficher_page("Entreprises")
 
-    # ---------- SECTION 2 : LES 6 CARTES ----------
-    def _creer_cartes(self):
-        bande = tk.Frame(self.contenu, bg=theme.BLANC)
-        bande.pack(fill="x")
-        grille = tk.Frame(bande, bg=theme.BLANC)
-        grille.pack(fill="x", padx=60, pady=30)
-
-        for i, (emoji, titre_carte, texte_carte, page, couleur, pastel) in enumerate(CARTES):
-            grille.columnconfigure(i, weight=1, uniform="carte")
-            carte = tk.Frame(grille, bg=theme.BLANC)
-            carte.grid(row=0, column=i, sticky="nw", padx=10)
-
-            pastille = tk.Frame(carte, bg=pastel, width=64, height=64)
-            pastille.pack(anchor="w")
-            pastille.pack_propagate(False)
-            tk.Label(pastille, text=emoji, font=(POLICE_EMOJI, 24),
-                     fg=couleur, bg=pastel).pack(expand=True)
-
-            tk.Label(carte, text=titre_carte, font=(theme.POLICE, 13, "bold"),
-                     fg=theme.MARINE, bg=theme.BLANC).pack(anchor="w", pady=(12, 2))
-            tk.Label(carte, text=texte_carte, font=theme.PETIT, fg=theme.TEXTE_CLAIR,
-                     bg=theme.BLANC, justify="left", wraplength=170).pack(anchor="w")
-
-            self._rendre_cliquable(carte, lambda p=page: self.app.afficher_page(p))
-
-    def _rendre_cliquable(self, widget, commande):
-        widget.bind("<Button-1>", lambda e: commande())
-        widget.config(cursor="hand2")
-        for enfant in widget.winfo_children():
-            self._rendre_cliquable(enfant, commande)
-
-    # ---------- SECTION 3 : POURQUOI CHOISIR ----------
+    # ---------- SECTION 2 : POURQUOI CHOISIR ----------
     def _creer_pourquoi(self):
         section = tk.Frame(self.contenu, bg=theme.FOND)
         section.pack(fill="x", pady=(40, 50))

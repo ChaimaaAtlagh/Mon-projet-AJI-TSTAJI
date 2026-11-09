@@ -21,6 +21,14 @@ TEXTE = "#1E293B"         # texte normal
 TEXTE_CLAIR = "#64748B"   # texte secondaire
 BORDURE = "#E2E8F0"
 
+# Contrôles de saisie inspirés de l'interface du chatbot.
+BLEU_CHAT = "#3B4FE0"
+BLEU_CHAT_SURVOL = "#2F40C0"
+CHAMP_FOND = "#F4F6FB"
+CHAMP_BORDURE = "#D5DBF5"
+CHAMP_PLACEHOLDER = "#6B7280"
+CHAMP_TEXTE = "#1A1F36"
+
 # Couleurs des cartes de la page d'accueil
 VIOLET = "#7C3AED"
 VERT = "#16A34A"
@@ -62,6 +70,25 @@ def appliquer_style(fenetre):
     style.configure("Secondaire.TButton", background=BLANC, foreground=BLEU,
                     font=GRAS, padding=(22, 10), bordercolor=BLEU)
     style.map("Secondaire.TButton", background=[("active", BLEU_CLAIR)])
+
+    # Menus déroulants : même palette douce et lisible que les nouveaux champs.
+    style.configure(
+        "TCombobox",
+        fieldbackground=CHAMP_FOND,
+        background=BLANC,
+        foreground=CHAMP_TEXTE,
+        selectbackground=BLEU_CHAT,
+        selectforeground=BLANC,
+        padding=(10, 8),
+        relief="flat",
+    )
+    style.map(
+        "TCombobox",
+        fieldbackground=[("readonly", CHAMP_FOND), ("focus", BLANC)],
+        foreground=[("readonly", CHAMP_TEXTE)],
+        selectbackground=[("readonly", CHAMP_FOND)],
+        selectforeground=[("readonly", CHAMP_TEXTE)],
+    )
 
     # Tableau (utilisé plus tard dans la page Entreprises)
     style.configure("Treeview", background=BLANC, fieldbackground=BLANC,

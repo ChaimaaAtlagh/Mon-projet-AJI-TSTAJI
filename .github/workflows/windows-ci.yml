@@ -1,0 +1,53 @@
+name: Windows build and smoke test
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  windows-build:
+    runs-on: windows-2022
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Install application and backend dependencies
+        run: |
+          python -m venv .venv
+          .\.venv\Scripts\python.exe -m pip install --upgrade pip
+          .\.venv\Scripts\python.exe -m pip install -r requirements.txt -r backend/requirements.txt
+
+      - name: Run Desktop tests
+        run: .\.venv\Scripts\python.exe -m unittest discover -s tests -v
+
+      - name: Run Django tests
+        working-directory: backend
+        run: ..\.venv\Scripts\python.exe manage.py test --settings=aji_api.test_settings
+
+      - name: Build a non-publishable test installer
+        run: |
+          $version = (Get-Content deployment/VERSION -Raw).Trim()
+          .\scripts\build_windows.ps1 -Version $version -ApiBaseUrl "" -AllowEmptyApiUrlForTests
+          $release = Get-ChildItem release -Directory -Filter "windows-v$version-*" |
+            Sort-Object LastWriteTime -Descending | Select-Object -First 1
+          if (-not $release) { throw "Dossier de build introuvable pour $version." }
+          "AJI_RELEASE_DIR=$($release.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Test install, update, launch and uninstall with isolated data
+        run: |
+          $version = (Get-Content deployment/VERSION -Raw).Trim()
+          $installer = Join-Path $env:AJI_RELEASE_DIR "AJI_TSTAJI_Setup.exe"
+          .\scripts\smoke_windows_install.ps1 -InstallerPath $installer

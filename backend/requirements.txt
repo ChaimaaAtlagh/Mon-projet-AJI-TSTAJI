@@ -1,0 +1,8 @@
+Django==5.2.19
+djangorestframework==3.18.3
+psycopg[binary]==3.3.7
+argon2-cffi==25.1.0
+python-dotenv==1.2.4
+gunicorn==26.2.0
+openai==3.46.0
+

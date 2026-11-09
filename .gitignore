@@ -1,6 +1,7 @@
 
 .env
 .venv/
+.venv-build-*/
 venv/
 venv312/
 __pycache__/
@@ -11,3 +12,5 @@ data/reports/documents_candidat/
 data/reports/cv_genere/
 data/raw/~$*.xlsx
 data/cleaned/~$*.xlsx
+release/
+/presentation projet AJI TSTAJI.pdf

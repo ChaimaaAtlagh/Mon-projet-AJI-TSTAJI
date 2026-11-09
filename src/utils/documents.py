@@ -21,10 +21,10 @@ from pathlib import Path
 from dotenv import load_dotenv
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
+from src.utils.paths import chemin_configuration, chemin_donnees
 
-RACINE = Path(__file__).resolve().parents[2]
-DOSSIER_SORTIE = RACINE / "data" / "reports" / "documents_candidat"
-load_dotenv(RACINE / ".env")
+DOSSIER_SORTIE = chemin_donnees("reports", "documents_candidat")
+load_dotenv(chemin_configuration(), override=False)
 
 VIDE = "-"
 BLEU_HEX = "2563EB"

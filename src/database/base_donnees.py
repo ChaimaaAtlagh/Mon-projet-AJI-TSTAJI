@@ -10,10 +10,9 @@ import hashlib
 import random
 import sqlite3
 from datetime import date, datetime, timedelta
-from pathlib import Path
+from src.utils.paths import chemin_donnees
 
-RACINE = Path(__file__).resolve().parents[2]
-FICHIER_BASE = RACINE / "data" / "aji_tstaji.db"
+FICHIER_BASE = chemin_donnees("aji_tstaji.db")
 
 STATUTS_POSSIBLES = [
     "À envoyer", "Envoyée", "Relancée",
@@ -44,6 +43,9 @@ COLONNES_PROFIL_UTILISATEUR = {
     "cv_chemin", "lettre_brouillon"
 }
 
+_BASE_INITIALISEE = False
+_CHEMIN_BASE_INITIALISE = None
+
 
 # ---------- CONNEXION ET INITIALISATION ----------
 
@@ -63,6 +65,16 @@ def _colonnes_existantes(connexion, table):
 
 
 def initialiser_base():
+    global _BASE_INITIALISEE, _CHEMIN_BASE_INITIALISE
+
+    chemin_base = FICHIER_BASE.resolve()
+    if (
+        _BASE_INITIALISEE
+        and _CHEMIN_BASE_INITIALISE == chemin_base
+        and chemin_base.is_file()
+    ):
+        return
+
     connexion = obtenir_connexion()
 
     try:
@@ -142,7 +154,14 @@ def initialiser_base():
             )
         """)
 
+        connexion.execute("""
+            CREATE INDEX IF NOT EXISTS idx_candidatures_utilisateur_date
+            ON candidatures (utilisateur_email, date_candidature DESC, id DESC)
+        """)
+
         connexion.commit()
+        _BASE_INITIALISEE = True
+        _CHEMIN_BASE_INITIALISE = chemin_base
 
     finally:
         connexion.close()

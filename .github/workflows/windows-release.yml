@@ -1,0 +1,93 @@
+name: Windows release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: windows-2022
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Install application and backend dependencies
+        run: |
+          python -m venv .venv
+          .\.venv\Scripts\python.exe -m pip install --upgrade pip
+          .\.venv\Scripts\python.exe -m pip install -r requirements.txt -r backend/requirements.txt
+
+      - name: Run Desktop tests
+        run: .\.venv\Scripts\python.exe -m unittest discover -s tests -v
+
+      - name: Run Django tests
+        working-directory: backend
+        run: ..\.venv\Scripts\python.exe manage.py test --settings=aji_api.test_settings
+
+      - name: Build installer and portable package
+        env:
+          AJI_PUBLIC_API_BASE_URL: ${{ vars.AJI_PUBLIC_API_BASE_URL }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:AJI_PUBLIC_API_BASE_URL)) {
+            throw "Définissez la variable de dépôt AJI_PUBLIC_API_BASE_URL avec l'URL HTTPS publique complète de l'API."
+          }
+          $tagVersion = $env:GITHUB_REF_NAME -replace '^v', ''
+          $sourceVersion = (Get-Content deployment/VERSION -Raw).Trim()
+          if ($tagVersion -ne $sourceVersion) {
+            throw "Le tag $env:GITHUB_REF_NAME doit correspondre à deployment/VERSION ($sourceVersion)."
+          }
+          .\scripts\build_windows.ps1 -Version $tagVersion -ApiBaseUrl $env:AJI_PUBLIC_API_BASE_URL
+          $release = Get-ChildItem release -Directory -Filter "windows-v$tagVersion-*" |
+            Sort-Object LastWriteTime -Descending | Select-Object -First 1
+          if (-not $release) { throw "Dossier de build introuvable pour $tagVersion." }
+          "AJI_RELEASE_DIR=$($release.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Test install, update, launch and uninstall in an isolated profile
+        run: |
+          $installer = Join-Path $env:AJI_RELEASE_DIR "AJI_TSTAJI_Setup.exe"
+          .\scripts\smoke_windows_install.ps1 -InstallerPath $installer
+
+      - name: Prepare stable download names
+        run: |
+          $version = $env:GITHUB_REF_NAME -replace '^v', ''
+          $output = Join-Path $env:RUNNER_TEMP "aji-tstaji-release-assets"
+          New-Item -ItemType Directory -Path $output | Out-Null
+          $assets = @(
+            @{ Source = "AJI_TSTAJI_Setup.exe"; Name = "AJI_TSTAJI_Setup.exe" },
+            @{ Source = "AJI_TSTAJI_FINAL.exe"; Name = "AJI_TSTAJI_FINAL.exe" },
+            @{ Source = "AJI_TSTAJI_FINAL-Windows-v$version.zip"; Name = "AJI_TSTAJI_FINAL-Windows.zip" }
+          )
+          foreach ($assetInfo in $assets) {
+            $source = Join-Path $env:AJI_RELEASE_DIR $assetInfo.Source
+            if (-not (Test-Path -LiteralPath $source)) { throw "Livrable manquant : $($assetInfo.Source)" }
+            Copy-Item -LiteralPath $source -Destination (Join-Path $output $assetInfo.Name)
+          }
+          Copy-Item -LiteralPath (Join-Path $env:AJI_RELEASE_DIR "package\LISEZ-MOI.md") -Destination (Join-Path $output "README-Windows.md")
+          foreach ($name in @("AJI_TSTAJI_Setup.exe", "AJI_TSTAJI_FINAL.exe", "AJI_TSTAJI_FINAL-Windows.zip")) {
+            $asset = Join-Path $output $name
+            $hash = (Get-FileHash -LiteralPath $asset -Algorithm SHA256).Hash
+            "$hash  $name" | Set-Content -LiteralPath "$asset.sha256" -Encoding ascii
+          }
+          "AJI_RELEASE_ASSETS=$output" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create $env:GITHUB_REF_NAME `
+            (Get-ChildItem -LiteralPath $env:AJI_RELEASE_ASSETS -File).FullName `
+            --title "AJI TSTAJI $env:GITHUB_REF_NAME" `
+            --generate-notes `
+            --verify-tag

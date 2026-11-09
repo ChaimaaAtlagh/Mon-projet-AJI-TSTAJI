@@ -1,6 +1,7 @@
 """Page chatbot IA de AJI TSTAJI — connexion à Groq (design panneau demi-page)."""
 
 import os
+import sys
 import threading
 import customtkinter as ctk
 from app.markdown import afficher_markdown
@@ -9,11 +10,11 @@ from tkinter import filedialog
 from dotenv import load_dotenv
 from pypdf import PdfReader
 from docx import Document
+from src.utils.paths import chemin_configuration
 
 from pathlib import Path
 
-RACINE_PROJET = Path(__file__).resolve().parents[1]
-load_dotenv(RACINE_PROJET / ".env")
+load_dotenv(chemin_configuration(), override=False)
 
 try:
     from openai import OpenAI
@@ -86,6 +87,7 @@ class ChatbotPage(ctk.CTkFrame):
         self.fermer = fermer
         self.api_key = os.getenv("GROQ_API_KEY", "").strip()
         self.modele = os.getenv("GROQ_MODEL", MODELE_PAR_DEFAUT).strip()
+        self.utiliser_backend = bool(getattr(sys, "frozen", False))
 
         self.client = None
         self.fichier_joint = None
@@ -327,20 +329,23 @@ class ChatbotPage(ctk.CTkFrame):
                 text="Écris un message avant de l'envoyer.")
             return
 
-        if not self.api_key:
+        if self.utiliser_backend:
+            if not getattr(self.app, "auth_session", None):
+                self._message(NOM_CHATBOT, "Reconnecte-toi pour utiliser l'assistant IA.")
+                return
+        elif not self.api_key:
             self._message(
                 NOM_CHATBOT,
                 "Clé GROQ_API_KEY introuvable dans le fichier .env.")
             return
-
-        if OpenAI is None:
+        elif OpenAI is None:
             self._message(
                 NOM_CHATBOT,
-                "Bibliothèque manquante. Dans le terminal, "
-                "exécute : python -m pip install openai")
+                "Bibliothèque manquante. Dans l'environnement Desktop, "
+                "installe openai avec le fichier requirements.txt.")
             return
 
-        if not self.client:
+        if not self.utiliser_backend and not self.client:
             try:
                 self.client = OpenAI(
                     api_key=self.api_key,
@@ -451,13 +456,19 @@ class ChatbotPage(ctk.CTkFrame):
             if not historique or historique[-1].get("content") != message:
                 historique.append({"role": "user", "content": message})
 
-            resultat = self.client.chat.completions.create(
-                model=self.modele,
-                messages=historique,
-                max_completion_tokens=700,
-            )
-
-            reponse = resultat.choices[0].message.content
+            if self.utiliser_backend:
+                messages_api = [
+                    item for item in historique if item.get("role") in {"user", "assistant"}
+                ]
+                resultat = self.app.auth_session.assistant_chat(messages_api)
+                reponse = resultat.get("reply", "")
+            else:
+                resultat = self.client.chat.completions.create(
+                    model=self.modele,
+                    messages=historique,
+                    max_completion_tokens=700,
+                )
+                reponse = resultat.choices[0].message.content
             if not reponse:
                 reponse = "Je n'ai pas reçu de réponse. Réessaie."
 

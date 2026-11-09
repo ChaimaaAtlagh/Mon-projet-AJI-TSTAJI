@@ -1,0 +1,14 @@
+# Local development secrets and Python environment
+/.env
+/.venv/
+
+# Runtime and test artifacts
+__pycache__/
+*.py[cod]
+/.private_documents/
+/.test_private_documents*/
+/staticfiles/
+.coverage
+coverage.xml
+htmlcov/
+

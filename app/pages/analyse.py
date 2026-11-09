@@ -11,6 +11,7 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
 
 from app import theme
+from app.widgets import barre_defilement_moderne, lier_defilement_molette
 
 COULEUR_BARRES = "#2563EB"
 
@@ -35,7 +36,7 @@ class Analyse(tk.Frame):
     def _creer_defilement(self):
         self.canvas_page = tk.Canvas(self, bg=theme.FOND, highlightthickness=0,
                                      yscrollincrement=30)
-        barre = ttk.Scrollbar(self, orient="vertical", command=self.canvas_page.yview)
+        barre = barre_defilement_moderne(self, self.canvas_page.yview)
         self.canvas_page.configure(yscrollcommand=barre.set)
         barre.pack(side="right", fill="y")
         self.canvas_page.pack(side="left", fill="both", expand=True)
@@ -46,11 +47,7 @@ class Analyse(tk.Frame):
             lambda e: self.canvas_page.configure(scrollregion=self.canvas_page.bbox("all")))
         self.canvas_page.bind("<Configure>",
             lambda e: self.canvas_page.itemconfig(fenetre, width=e.width))
-        self.bind_all("<MouseWheel>", self._molette, add="+")
-
-    def _molette(self, evenement):
-        if self.winfo_ismapped():
-            self.canvas_page.yview_scroll(int(-evenement.delta / 120), "units")
+        lier_defilement_molette(self.canvas_page)
 
     def _creer_titre(self):
         tk.Label(self.contenu, text="Analyse", font=theme.TITRE, fg=theme.MARINE,

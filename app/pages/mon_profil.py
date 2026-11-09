@@ -10,7 +10,11 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
 from app import theme
-from app.widgets import BoutonModerne
+from app.widgets import (
+    BoutonModerne, barre_defilement_moderne, entree_moderne,
+    lier_defilement_molette,
+    liste_moderne, zone_texte_moderne,
+)
 from src.database.base_donnees import (
     initialiser_base,
     obtenir_profil_utilisateur,
@@ -35,6 +39,7 @@ class MonProfil(tk.Frame):
         self.app = app
         self.entrees = {}
         self.chemin_cv = ""
+        self._profil_charge = False
         initialiser_base()
 
         self._creer_defilement()
@@ -47,7 +52,7 @@ class MonProfil(tk.Frame):
     # ---------- DÉFILEMENT ----------
     def _creer_defilement(self):
         self.canvas = tk.Canvas(self, bg=theme.FOND, highlightthickness=0, yscrollincrement=30)
-        barre = ttk.Scrollbar(self, orient="vertical", command=self.canvas.yview)
+        barre = barre_defilement_moderne(self, self.canvas.yview)
         self.canvas.configure(yscrollcommand=barre.set)
         barre.pack(side="right", fill="y")
         self.canvas.pack(side="left", fill="both", expand=True)
@@ -57,11 +62,7 @@ class MonProfil(tk.Frame):
         self.contenu.bind("<Configure>",
             lambda e: self.canvas.configure(scrollregion=self.canvas.bbox("all")))
         self.canvas.bind("<Configure>", lambda e: self.canvas.itemconfig(fenetre, width=e.width))
-        self.bind_all("<MouseWheel>", self._molette, add="+")
-
-    def _molette(self, evenement):
-        if self.winfo_ismapped():
-            self.canvas.yview_scroll(int(-evenement.delta / 120), "units")
+        lier_defilement_molette(self.canvas)
 
     # ---------- FORMULAIRE PRINCIPAL ----------
     def _creer_formulaire(self):
@@ -76,35 +77,42 @@ class MonProfil(tk.Frame):
                          highlightbackground=theme.BORDURE, highlightthickness=1)
         carte.pack(fill="x", padx=50, pady=(0, 16))
         grille = tk.Frame(carte, bg=theme.BLANC)
-        grille.pack(padx=24, pady=20)
+        grille.pack(fill="x", padx=24, pady=20)
+        grille.grid_columnconfigure(0, weight=1, uniform="profil")
+        grille.grid_columnconfigure(1, weight=1, uniform="profil")
 
         for i, (cle, titre) in enumerate(CHAMPS_TEXTE):
             ligne, colonne = i // 2, i % 2
             bloc = tk.Frame(grille, bg=theme.BLANC)
-            bloc.grid(row=ligne, column=colonne, sticky="w", padx=14, pady=8)
-            tk.Label(bloc, text=titre, font=theme.PETIT, fg=theme.TEXTE_CLAIR,
+            bloc.grid(row=ligne, column=colonne, sticky="ew", padx=12, pady=8)
+            bloc.grid_columnconfigure(0, weight=1)
+            tk.Label(bloc, text=titre, font=theme.GRAS, fg="#000000",
                      bg=theme.BLANC).pack(anchor="w")
-            champ = tk.Entry(bloc, width=32, font=theme.NORMAL, relief="solid", bd=1)
-            champ.pack(ipady=4)
+            champ = entree_moderne(bloc, largeur=250, hauteur=46)
+            champ.pack(fill="x", pady=(6, 0))
             self.entrees[cle] = champ
 
         rangee_suivante = (len(CHAMPS_TEXTE) // 2) + 1
         bloc_recherche = tk.Frame(grille, bg=theme.BLANC)
-        bloc_recherche.grid(row=rangee_suivante, column=0, sticky="w", padx=14, pady=8)
-        tk.Label(bloc_recherche, text="Je cherche", font=theme.PETIT, fg=theme.TEXTE_CLAIR,
+        bloc_recherche.grid(row=rangee_suivante, column=0, sticky="ew", padx=12, pady=8)
+        bloc_recherche.grid_columnconfigure(0, weight=1)
+        tk.Label(bloc_recherche, text="Je cherche", font=theme.GRAS, fg="#000000",
                  bg=theme.BLANC).pack(anchor="w")
-        self.choix_recherche = ttk.Combobox(bloc_recherche, values=OPTIONS_RECHERCHE,
-                                            state="readonly", width=29, font=theme.NORMAL)
-        self.choix_recherche.pack(ipady=2)
+        self.choix_recherche = liste_moderne(
+            bloc_recherche, OPTIONS_RECHERCHE, largeur=250,
+        )
+        self.choix_recherche.pack(fill="x", pady=(6, 0))
 
         bloc_competences = tk.Frame(grille, bg=theme.BLANC)
         bloc_competences.grid(row=rangee_suivante + 1, column=0, columnspan=2,
-                              sticky="w", padx=14, pady=8)
+                              sticky="ew", padx=12, pady=8)
+        bloc_competences.grid_columnconfigure(0, weight=1)
         tk.Label(bloc_competences, text="Compétences (séparées par des virgules)",
-                 font=theme.PETIT, fg=theme.TEXTE_CLAIR, bg=theme.BLANC).pack(anchor="w")
-        self.champ_competences = tk.Text(bloc_competences, width=68, height=3,
-                                         font=theme.NORMAL, relief="solid", bd=1)
-        self.champ_competences.pack()
+                 font=theme.GRAS, fg="#000000", bg=theme.BLANC).pack(anchor="w")
+        self.champ_competences = zone_texte_moderne(
+            bloc_competences, largeur=520, hauteur=94
+        )
+        self.champ_competences.pack(fill="x", pady=(6, 0))
 
     # ---------- SECTION MON CV ----------
     def _creer_section_cv(self):
@@ -179,9 +187,10 @@ class MonProfil(tk.Frame):
                  font=theme.PETIT, fg=theme.TEXTE_CLAIR, bg=theme.BLANC
                  ).pack(anchor="w", pady=(2, 12))
 
-        self.champ_lettre = tk.Text(contenu, width=80, height=8, font=theme.NORMAL,
-                                    relief="solid", bd=1, wrap="word")
-        self.champ_lettre.pack(anchor="w")
+        self.champ_lettre = zone_texte_moderne(
+            contenu, largeur=620, hauteur=220
+        )
+        self.champ_lettre.pack(fill="x")
 
         boutons = tk.Frame(contenu, bg=theme.BLANC)
         boutons.pack(anchor="w", pady=(10, 0))
@@ -281,9 +290,11 @@ class MonProfil(tk.Frame):
         self.champ_lettre.insert(
             "1.0", profil.get("lettre_brouillon") or ""
         )
+        self._profil_charge = True
 
     def actualiser(self):
-        self._charger_profil()
+        if not self._profil_charge:
+            self._charger_profil()
 
     def enregistrer(self):
         donnees = self._donnees_actuelles()

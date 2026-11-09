@@ -5,18 +5,19 @@ candidature (texte) à partir du profil (SQLite). Aucune donnée inventée.
 """
 
 import tkinter as tk
-from pathlib import Path
 from tkinter import messagebox, ttk
 
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 
 from app import theme
-from app.widgets import BoutonModerne
+from app.widgets import (
+    BoutonModerne, barre_defilement_moderne, lier_defilement_molette,
+)
 from src.database.base_donnees import initialiser_base, obtenir_profil
+from src.utils.paths import chemin_donnees
 
-RACINE = Path(__file__).resolve().parents[2]
-DOSSIER_SORTIE = RACINE / "data" / "reports" / "cv_genere"
+DOSSIER_SORTIE = chemin_donnees("reports", "cv_genere")
 
 VIDE = "-"
 BLEU_HEX = "2563EB"
@@ -43,7 +44,7 @@ class GenerationCV(tk.Frame):
 
     def _creer_defilement(self):
         self.canvas = tk.Canvas(self, bg=theme.FOND, highlightthickness=0, yscrollincrement=30)
-        barre = ttk.Scrollbar(self, orient="vertical", command=self.canvas.yview)
+        barre = barre_defilement_moderne(self, self.canvas.yview)
         self.canvas.configure(yscrollcommand=barre.set)
         barre.pack(side="right", fill="y")
         self.canvas.pack(side="left", fill="both", expand=True)
@@ -53,11 +54,7 @@ class GenerationCV(tk.Frame):
         self.contenu.bind("<Configure>",
             lambda e: self.canvas.configure(scrollregion=self.canvas.bbox("all")))
         self.canvas.bind("<Configure>", lambda e: self.canvas.itemconfig(fenetre, width=e.width))
-        self.bind_all("<MouseWheel>", self._molette, add="+")
-
-    def _molette(self, evenement):
-        if self.winfo_ismapped():
-            self.canvas.yview_scroll(int(-evenement.delta / 120), "units")
+        lier_defilement_molette(self.canvas)
 
     def _creer_titre(self):
         tk.Label(self.contenu, text="Génération CV", font=theme.TITRE, fg=theme.MARINE,
