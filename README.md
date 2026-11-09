@@ -1,7 +1,6 @@
 # AJI TSTAJI
 
-Application Python de recherche de stage/emploi et de suivi de candidatures, destinée aux étudiants à Marrakech.
-
+Plateforme intelligente dédiée à la recherche, la collecte, l'analyse et la visualisation des opportunités professionnelles et des offres de stage à Marrakech. Elle permet également de postuler aux opportunités, de gérer et suivre les candidatures, grâce à des outils d'analyse de données et à l'intelligence artificielle.
 ## Objectif
 
 Centraliser en une seule application :
